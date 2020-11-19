@@ -325,12 +325,12 @@ public class AddressBookServiceTest {
     // Delete a user
     Client client = ClientBuilder.newClient();
     Response response = client
-      .target("http://localhost:8282/contacts/person/2").request()
+      .target("http://localhost:8282/contacts/person/1").request()
       .delete();
     assertEquals(204, response.getStatus());
 
     // Verify that the user has been deleted
-    response = client.target("http://localhost:8282/contacts/person/2")
+    response = client.target("http://localhost:8282/contacts/person/1")
       .request().delete();
     assertEquals(404, response.getStatus());
 
@@ -340,12 +340,42 @@ public class AddressBookServiceTest {
     //the id to the next available number without taking into account the ones that were already added)
 
     //Check idempotency (already deleted)
-    response = client.target("http://localhost:8282/contacts/person/2")
+    response = client.target("http://localhost:8282/contacts/person/1")
       .request().delete();
     assertEquals(404, response.getStatus());
 
     //Check not safe
     assertEquals(1, ab.getPersonList().size());
+
+    //BUG
+    //Maria will have ID = 1, since she's the first user created with the POST method, but so will Salvador (since we added him manually)
+    //Therefore, consecutive calls to DELETE will not return the expected code (First call will be 204, as expected, but second one will ALSO be 204
+    // since the first one would delete Salvador, and the second one will delete Maria)
+
+    //Manually add Salvador
+    ab.getPersonList().add(salvador);
+
+    // Create Maria
+    Person maria = new Person();
+    maria.setName("Maria");
+    client.target("http://localhost:8282/contacts")
+      .request(MediaType.APPLICATION_JSON)
+        .post(Entity.entity(maria, MediaType.APPLICATION_JSON));
+
+    
+    response = client.target("http://localhost:8282/contacts/person/1")
+      .request().delete();
+    assertEquals(204, response.getStatus());
+
+    //Now, a code of 404 should be expected (for idempotency defininition of DELETE), but code is 204
+    response = client.target("http://localhost:8282/contacts/person/1")
+        .request().delete();
+    assertEquals(204, response.getStatus());
+
+    //Code will be 404 now
+    response = client.target("http://localhost:8282/contacts/person/1")
+        .request().delete();
+    assertEquals(404, response.getStatus());
 
   }
 
